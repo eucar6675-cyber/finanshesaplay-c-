@@ -1,4 +1,4 @@
-name: Android APK Generator
+nname: Android APK Generator
 
 on:
   push:
@@ -18,22 +18,21 @@ jobs:
         java-version: '17'
         distribution: 'temurin'
 
-    - name: Create Base Android Project Structure
+    - name: Create Complete Android Project
       run: |
-        # Klasörleri temiz ve taze olarak oluşturuyoruz
-        rm -rf app settings.gradle build.gradle
+        # Eski hatalı olabilecek her şeyi temizliyoruz
+        rm -rf app settings.gradle build.gradle gradlew gradle build
+        
+        # Tam klasör yapısını kuruyoruz
         mkdir -p app/src/main/java/com/example/karzararhesapla
         mkdir -p app/src/main/res/layout
         mkdir -p app/src/main/res/values
-        
-        # Ana klasördeki dosyaları doğru yerlerine taşıyoruz
-        if [ -f MainActivity.kt ]; then cp MainActivity.kt app/src/main/java/com/example/karzararhesapla/; fi
-        if [ -f activity_main.xml ]; then cp activity_main.xml app/src/main/res/layout/; fi
-        
-        # Gradle ayar dosyalarını oluşturuyoruz
+
+        # 1. settings.gradle dosyasını oluştur
         echo 'rootProject.name = "FinansHesaplayici"' > settings.gradle
         echo 'include ":app"' >> settings.gradle
 
+        # 2. Kök build.gradle dosyasını oluştur
         cat << 'EOF' > build.gradle
         buildscript {
             repositories { google(); mavenCentral() }
@@ -47,11 +46,10 @@ jobs:
         }
         EOF
 
+        # 3. app/build.gradle dosyasını oluştur
         cat << 'EOF' > app/build.gradle
-        plugins {
-            id 'com.android.application'
-            id 'org.jetbrains.kotlin.android'
-        }
+        apply plugin: 'com.android.application'
+        apply plugin: 'kotlin-android'
 
         android {
             namespace 'com.example.karzararhesapla'
@@ -77,11 +75,262 @@ jobs:
         }
         EOF
 
+        # 4. MainActivity.kt dosyasını doğrudan yerine yazıyoruz (Dışarıdan kopyalama yapmıyoruz)
+        cat << 'EOF' > app/src/main/java/com/example/karzararhesapla/MainActivity.kt
+        package com.example.karzararhesapla
+
+        import com.example.karzararhesapla.R
+        import android.graphics.Color
+        import android.os.Bundle
+        import android.widget.Button
+        import android.widget.RadioGroup
+        import android.widget.TextView
+        import android.widget.Toast
+        import androidx.appcompat.app.AppCompatActivity
+        import com.google.android.material.textfield.TextInputEditText
+        import java.text.DecimalFormat
+
+        class MainActivity : AppCompatActivity() {
+            private lateinit var df: DecimalFormat
+            override fun onCreate(savedInstanceState: Bundle?) {
+                super.onCreate(savedInstanceState)
+                setContentView(R.layout.activity_main)
+                df = DecimalFormat("#,##0.00")
+                val etYatirimTutari = findViewById<TextInputEditText>(R.id.etYatirimTutari)
+                val etKomisyonOrani = findViewById<TextInputEditText>(R.id.etKomisyonOrani)
+                val etVergiOrani = findViewById<TextInputEditText>(R.id.etVergiOrani)
+                val etKarZararOrani = findViewById<TextInputEditText>(R.id.etKarZararOrani)
+                val rgYon = findViewById<RadioGroup>(R.id.rgYon)
+                val btnHesapla = findViewById<Button>(R.id.btnHesapla)
+                val tvBrutResult = findViewById<TextView>(R.id.tvBrutResult)
+                val tvKomisyonResult = findViewById<TextView>(R.id.tvKomisyonResult)
+                val tvVergiResult = findViewById<TextView>(R.id.tvVergiResult)
+                val tvNetParaResult = findViewById<TextView>(R.id.tvNetParaResult)
+                val tvDurumEtiketi = findViewById<TextView>(R.id.tvDurumEtiketi)
+
+                btnHesapla.setOnClickListener {
+                    val yatirimStr = etYatirimTutari.text.toString().trim()
+                    val komisyonStr = etKomisyonOrani.text.toString().trim()
+                    val vergiStr = etVergiOrani.text.toString().trim()
+                    val karZararStr = etKarZararOrani.text.toString().trim()
+
+                    if (yatirimStr.isEmpty() || komisyonStr.isEmpty() || vergiStr.isEmpty() || karZararStr.isEmpty()) {
+                        Toast.makeText(this, "Lütfen tüm alanları doldurun!", Toast.LENGTH_LONG).show()
+                        return@setOnClickListener
+                    }
+                    try {
+                        val yatirimTutari = yatirimStr.replace(",", ".").toDouble()
+                        val komisyonOrani = komisyonStr.replace(",", ".").toDouble()
+                        val vergiOrani = vergiStr.replace(",", ".").toDouble()
+                        val karZararOrani = karZararStr.replace(",", ".").toDouble()
+                        val isProfit = rgYon.checkedRadioButtonId == R.id.rbKar
+                        val yonKatsayisi = if (isProfit) 1.0 else -1.0
+                        val brutKarZarar = yatirimTutari * (karZararOrani / 100.0) * yonKatsayisi
+                        val alimKomisyonu = yatirimTutari * (komisyonOrani / 100.0)
+                        val satisTutari = yatirimTutari + brutKarZarar
+                        val satisKomisyonu = satisTutari * (komisyonOrani / 100.0)
+                        val toplamKomisyon = alimKomisyonu + satisKomisyonu
+                        val netVergi = if (isProfit && brutKarZarar > 0) brutKarZarar * (vergiOrani / 100.0) else 0.0
+                        val netPara = yatirimTutari + brutKarZarar - toplamKomisyon - netVergi
+                        val paraBirimi = " TL"
+                        
+                        if (isProfit) {
+                            tvBrutResult.text = "+${df.format(brutKarZarar)}$paraBirimi"
+                            tvBrutResult.setTextColor(Color.parseColor("#4ADE80"))
+                        } else {
+                            tvBrutResult.text = "${df.format(brutKarZarar)}$paraBirimi"
+                            tvBrutResult.setTextColor(Color.parseColor("#F87171"))
+                        }
+                        tvKomisyonResult.text = "${df.format(toplamKomisyon)}$paraBirimi"
+                        tvVergiResult.text = "${df.format(netVergi)}$paraBirimi"
+                        tvNetParaResult.text = "${df.format(netPara)}$paraBirimi"
+                        val netKazanc = netPara - yatirimTutari
+                        if (netKazanc >= 0) {
+                            tvNetParaResult.setTextColor(Color.parseColor("#22C55E"))
+                            tvDurumEtiketi.text = "Net Durum: KÂRDASINIZ (+${df.format(netKazanc)} TL)"
+                            tvDurumEtiketi.setTextColor(Color.parseColor("#22C55E"))
+                        } else {
+                            tvNetParaResult.setTextColor(Color.parseColor("#EF4444"))
+                            tvDurumEtiketi.text = "Net Durum: ZARARDASINIZ (${df.format(netKazanc)} TL)"
+                            tvDurumEtiketi.setTextColor(Color.parseColor("#EF4444"))
+                        }
+                    } catch (e: Exception) {
+                        Toast.makeText(this, "Geçersiz değer girdiniz!", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            }
+        }
+        EOF
+
+        # 5. activity_main.xml dosyasını doğrudan yerine yazıyoruz
+        cat << 'EOF' > app/src/main/res/layout/activity_main.xml
+        <?xml version="1.0" encoding="utf-8"?>
+        <androidx.core.widget.NestedScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+            xmlns:app="http://schemas.android.com/apk/res-auto"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:fillViewport="true"
+            android:background="#0F172A">
+            <androidx.constraintlayout.widget.ConstraintLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:padding="20dp">
+                <TextView
+                    android:id="@+id/tvTitle"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Midas &amp; Borsa Hesapla"
+                    android:textColor="#FFFFFF"
+                    android:textSize="24sp"
+                    android:textStyle="bold"
+                    android:gravity="center"
+                    android:layout_marginTop="16dp"
+                    app:layout_constraintTop_toTopOf="parent" />
+                <TextView
+                    android:id="@+id/tvSubtitle"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Finansal Yatırım Hesaplayıcı"
+                    android:textColor="#94A3B8"
+                    android:textSize="14sp"
+                    android:gravity="center"
+                    android:layout_marginTop="4dp"
+                    app:layout_constraintTop_toBottomOf="@id/tvTitle" />
+                <com.google.android.material.card.MaterialCardView
+                    android:id="@+id/cardInputs"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="24dp"
+                    app:cardBackgroundColor="#1E293B"
+                    app:cardCornerRadius="16dp"
+                    app:strokeColor="#334155"
+                    app:strokeWidth="1dp"
+                    app:layout_constraintTop_toBottomOf="@id/tvSubtitle">
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical"
+                        android:padding="16dp">
+                        <com.google.android.material.textfield.TextInputLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:hint="Yatırılan Tutar (TL)"
+                            android:textColorHint="#94A3B8"
+                            app:boxStrokeColor="#3B82F6"
+                            style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox">
+                            <com.google.android.material.textfield.TextInputEditText
+                                android:id="@+id/etYatirimTutari"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:textColor="#FFFFFF"
+                                android:inputType="numberDecimal"
+                                android:digits="0123456789,."/>
+                        </com.google.android.material.textfield.TextInputLayout>
+                        <com.google.android.material.textfield.TextInputLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="12dp"
+                            android:hint="Alım-Satım Komisyon Oranı (%)"
+                            android:textColorHint="#94A3B8"
+                            app:boxStrokeColor="#3B82F6"
+                            style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox">
+                            <com.google.android.material.textfield.TextInputEditText
+                                android:id="@+id/etKomisyonOrani"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:textColor="#FFFFFF"
+                                android:inputType="numberDecimal"
+                                android:digits="0123456789,."/>
+                        </com.google.android.material.textfield.TextInputLayout>
+                        <com.google.android.material.textfield.TextInputLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="12dp"
+                            android:hint="Kâr Üstünden Vergi Oranı (%)"
+                            android:textColorHint="#94A3B8"
+                            app:boxStrokeColor="#3B82F6"
+                            style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox">
+                            <com.google.android.material.textfield.TextInputEditText
+                                android:id="@+id/etVergiOrani"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:textColor="#FFFFFF"
+                                android:inputType="numberDecimal"
+                                android:digits="0123456789,."/>
+                        </com.google.android.material.textfield.TextInputLayout>
+                        <RadioGroup
+                            android:id="@+id/rgYon"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:orientation="horizontal"
+                            android:checkedButton="@id/rbKar"
+                            android:layout_marginTop="12dp"
+                            android:layout_marginBottom="12dp">
+                            <RadioButton android:id="@+id/rbKar" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="KÂR (+)" android:textColor="#4ADE80" android:buttonTint="#4ADE80" />
+                            <RadioButton android:id="@+id/rbZarar" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="ZARAR (-)" android:textColor="#F87171" android:buttonTint="#F87171" />
+                        </RadioGroup>
+                        <com.google.android.material.textfield.TextInputLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:hint="Hedeflenen Kâr / Zarar Oranı (%)"
+                            android:textColorHint="#94A3B8"
+                            app:boxStrokeColor="#3B82F6"
+                            style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox">
+                            <com.google.android.material.textfield.TextInputEditText
+                                android:id="@+id/etKarZararOrani"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:textColor="#FFFFFF"
+                                android:inputType="numberDecimal"
+                                android:digits="0123456789,."/>
+                        </com.google.android.material.textfield.TextInputLayout>
+                        <Button
+                            android:id="@+id/btnHesapla"
+                            android:layout_width="match_parent"
+                            android:layout_height="56dp"
+                            android:layout_marginTop="20dp"
+                            android:text="HESAPLA"
+                            android:textSize="16sp"
+                            android:textStyle="bold"
+                            android:textColor="#FFFFFF"
+                            android:backgroundTint="#3B82F6"
+                            app:cornerRadius="8dp" />
+                    </LinearLayout>
+                </com.google.android.material.card.MaterialCardView>
+                <com.google.android.material.card.MaterialCardView
+                    android:id="@+id/cardResult"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="20dp"
+                    app:cardBackgroundColor="#1E293B"
+                    app:cardCornerRadius="16dp"
+                    app:strokeColor="#334155"
+                    app:strokeWidth="1.5dp"
+                    app:layout_constraintTop_toBottomOf="@id/cardInputs">
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical"
+                        android:padding="20dp">
+                        <TextView android:id="@+id/tvDurumEtiketi" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Hesaplama Sonuçları" android:textColor="#94A3B8" android:gravity="center" android:layout_marginBottom="16dp" />
+                        <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Cebimize Kalan Net Para" android:textColor="#94A3B8" android:textSize="12sp" android:gravity="center" />
+                        <TextView android:id="@+id/tvNetParaResult" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="0.00 TL" android:textColor="#FFFFFF" android:textSize="32sp" android:textStyle="bold" android:gravity="center" />
+                        <View android:layout_width="match_parent" android:layout_height="1dp" android:background="#334155" android:layout_marginTop="16dp" android:layout_marginBottom="16dp"/>
+                        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:layout_marginBottom="10dp"><TextView android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="Brüt Kâr / Zarar:" android:textColor="#94A3B8" /><TextView android:id="@+id/tvBrutResult" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="0.00 TL" android:textColor="#FFFFFF" android:textStyle="bold" /></LinearLayout>
+                        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:layout_marginBottom="10dp"><TextView android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="Toplam Komisyon:" android:textColor="#94A3B8" /><TextView android:id="@+id/tvKomisyonResult" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="0.00 TL" android:textColor="#FFFFFF" android:textStyle="bold" /></LinearLayout>
+                        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal"><TextView android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="Net Vergi Kesintisi:" android:textColor="#94A3B8" /><TextView android:id="@+id/tvVergiResult" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="0.00 TL" android:textColor="#FFFFFF" android:textStyle="bold" /></LinearLayout>
+                    </LinearLayout>
+                </com.google.android.material.card.MaterialCardView>
+            </androidx.constraintlayout.widget.ConstraintLayout>
+        </androidx.core.widget.NestedScrollView>
+        EOF
+
+        # 6. AndroidManifest.xml dosyasını oluştur
         cat << 'EOF' > app/src/main/AndroidManifest.xml
         <manifest xmlns:android="http://schemas.android.com/apk/res/android">
             <application
                 android:allowBackup="true"
-                android:label="Finans Hesaplayici"
+                android:label="Midas Hesapla"
                 android:supportsRtl="true"
                 android:theme="@style/Theme.MaterialComponents.DayNight.NoActionBar">
                 <activity
@@ -96,16 +345,19 @@ jobs:
         </manifest>
         EOF
 
+        # 7. themes.xml dosyasını oluştur
         cat << 'EOF' > app/src/main/res/values/themes.xml
         <resources>
             <style name="Theme.FinansHesaplayici" parent="Theme.MaterialComponents.DayNight.NoActionBar" />
         </resources>
         EOF
 
+        # GradleWrapper indirip oluşturuyoruz
         gradle wrapper --gradle-version 8.1.1
 
     - name: Build APK with Gradle
       run: |
+        # BURASI ÇOK ÖNEMLİ: İzin hatası almamak için çalıştırma yetkisi veriyoruz
         chmod +x gradlew
         ./gradlew assembleDebug
 
