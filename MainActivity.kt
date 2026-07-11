@@ -1,5 +1,6 @@
 package com.example.karzararhesapla
 
+import com.example.karzararhesapla.R
 import android.graphics.Color
 import android.os.Bundle
 import android.widget.Button
