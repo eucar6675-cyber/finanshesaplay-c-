@@ -1,4 +1,4 @@
-nname: Android APK Generator
+name: Android APK Generator
 
 on:
   push:
