@@ -24,11 +24,9 @@ jobs:
         mkdir -p app/src/main/res/layout
         mkdir -p app/src/main/res/values
         
-        # Dosyaları doğru Android klasör yapısına taşıyoruz
         if [ -f MainActivity.kt ]; then mv MainActivity.kt app/src/main/java/com/example/karzararhesapla/; fi
         if [ -f activity_main.xml ]; then mv activity_main.xml app/src/main/res/layout/; fi
         
-        # Temel Gradle ayarları
         echo 'rootProject.name = "FinansHesaplayici"' > settings.gradle
         echo 'include ":app"' >> settings.gradle
 
