@@ -20,13 +20,17 @@ jobs:
 
     - name: Create Base Android Project Structure
       run: |
+        # Klasörleri temiz ve taze olarak oluşturuyoruz
+        rm -rf app settings.gradle build.gradle
         mkdir -p app/src/main/java/com/example/karzararhesapla
         mkdir -p app/src/main/res/layout
         mkdir -p app/src/main/res/values
         
-        if [ -f MainActivity.kt ]; then mv MainActivity.kt app/src/main/java/com/example/karzararhesapla/; fi
-        if [ -f activity_main.xml ]; then mv activity_main.xml app/src/main/res/layout/; fi
+        # Ana klasördeki dosyaları doğru yerlerine taşıyoruz
+        if [ -f MainActivity.kt ]; then cp MainActivity.kt app/src/main/java/com/example/karzararhesapla/; fi
+        if [ -f activity_main.xml ]; then cp activity_main.xml app/src/main/res/layout/; fi
         
+        # Gradle ayar dosyalarını oluşturuyoruz
         echo 'rootProject.name = "FinansHesaplayici"' > settings.gradle
         echo 'include ":app"' >> settings.gradle
 
@@ -44,8 +48,10 @@ jobs:
         EOF
 
         cat << 'EOF' > app/build.gradle
-        apply plugin: 'com.android.application'
-        apply plugin: 'kotlin-android'
+        plugins {
+            id 'com.android.application'
+            id 'org.jetbrains.kotlin.android'
+        }
 
         android {
             namespace 'com.example.karzararhesapla'
@@ -75,7 +81,7 @@ jobs:
         <manifest xmlns:android="http://schemas.android.com/apk/res/android">
             <application
                 android:allowBackup="true"
-                android:label="BORSAEMİRHAN"
+                android:label="Finans Hesaplayici"
                 android:supportsRtl="true"
                 android:theme="@style/Theme.MaterialComponents.DayNight.NoActionBar">
                 <activity
@@ -99,7 +105,9 @@ jobs:
         gradle wrapper --gradle-version 8.1.1
 
     - name: Build APK with Gradle
-      run: ./gradlew assembleDebug
+      run: |
+        chmod +x gradlew
+        ./gradlew assembleDebug
 
     - name: Upload Finished APK
       uses: actions/upload-artifact@v4
